@@ -3,6 +3,7 @@ package order
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,6 +110,13 @@ type ModifyOrderRequest struct {
 type ModifyOrderResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
+}
+
+type OrderInfo struct {
+	ID        string
+	Status    string
+	CreatedAt time.Time
+	// Добавьте другие поля по необходимости
 }
 
 // Функция для создания нового ордера
@@ -253,7 +261,7 @@ func GetOrderStatus(orderID int, accessToken string) (*OrderResponse, error) {
 		case http.StatusInternalServerError:
 			return nil, fmt.Errorf("internal server error: try again later or contact Finam support")
 		default:
-			return nil, fmt.Errorf("Trade API request failed with status code: %d", resp.StatusCode)
+			return nil, fmt.Errorf("trade API request failed with status code: %d", resp.StatusCode)
 		}
 	}
 
@@ -409,7 +417,7 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 		case http.StatusInternalServerError:
 			return nil, fmt.Errorf("internal server error: try again later or contact Finam support")
 		default:
-			return nil, fmt.Errorf("Trade API request failed with status code: %d", resp.StatusCode)
+			return nil, fmt.Errorf("trade API request failed with status code: %d", resp.StatusCode)
 		}
 	}
 
@@ -468,4 +476,59 @@ func ModifyOrder(orderID int, newOrder *OrderRequest) (*OrderResponse, error) {
 		Msg("New order created successfully")
 
 	return orderResp, nil
+}
+
+// Функция для получения информации о состоянии ордера (заявки) с торговой площадки
+func GetOrderInfo(orderID string) (OrderInfo, error) {
+	// URL для запроса информации о состоянии ордера (заявки)
+	url := "https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities.xml?q=SECID=" + orderID
+
+	// Отправляем GET-запрос
+	resp, err := http.Get(url)
+	if err != nil {
+		return OrderInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	// Читаем ответ
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return OrderInfo{}, err
+	}
+
+	// Парсим XML
+	var xmlData struct {
+		Securities struct {
+			Security []struct {
+				ID        string
+				Status    string
+				CreatedAt string
+			}
+		}
+	}
+	err = xml.Unmarshal(body, &xmlData)
+	if err != nil {
+		return OrderInfo{}, err
+	}
+
+	// Находим информацию о состоянии ордера (заявки)
+	for _, security := range xmlData.Securities.Security {
+		if security.ID == orderID {
+			// Парсим дату создания
+			createdAt, err := time.Parse("2006-01-02T15:04:05", security.CreatedAt)
+			if err != nil {
+				return OrderInfo{}, err
+			}
+
+			// Возвращаем информацию о состоянии ордера (заявки)
+			return OrderInfo{
+				ID:        security.ID,
+				Status:    security.Status,
+				CreatedAt: createdAt,
+			}, nil
+		}
+	}
+
+	// Если информация о состоянии ордера (заявки) не найдена, возвращаем ошибку
+	return OrderInfo{}, fmt.Errorf("информация о состоянии ордера (заявки) не найдена")
 }
