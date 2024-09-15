@@ -23,6 +23,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/xtgo/set v1.0.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20211027215541-db492cf91b37 // indirect
 	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
@@ -33,6 +34,7 @@ require (
 )
 
 require (
+	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.23.0
 	gonum.org/v1/gonum v0.15.1
