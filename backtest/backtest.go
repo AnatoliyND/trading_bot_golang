@@ -121,8 +121,7 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 
 		logger.Logger.Debug("Bar processed",
 			zap.Int("bar", i),
-			zap.Time("time", currentBarTime),
-			zap.Interface("signals", signals))
+			zap.Time("time", currentBarTime))
 
 		// Обработка сигналов
 		for _, signal := range signals {

@@ -189,3 +189,25 @@ func fetchMarketData(urls []string) {
 		log.Printf("Результат: %+v", result)
 	}
 }
+
+// FetchMarketData fetches market data from multiple URLs asynchronously.
+func FetchMarketData(urls []string) ([]ApiResponse, error) {
+	ch := make(chan ApiResponse, len(urls))
+	var results []ApiResponse
+
+	// Асинхронный запрос для каждого URL
+	for _, url := range urls {
+		go asyncApiRequest(url, ch)
+	}
+
+	// Ожидание всех ответов
+	for range urls {
+		result := <-ch
+		if result.Status != "success" {
+			return nil, fmt.Errorf("error fetching market data: %s", result.Message)
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
