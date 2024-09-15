@@ -14,7 +14,8 @@ import (
 
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-gota/gota/series" // Для FloatType
-	"gonum.org/v1/gonum/floats"      // Для Min и Max
+	"go.uber.org/zap"
+	"gonum.org/v1/gonum/floats" // Для Min и Max
 )
 
 // Структура для хранения данных о текущих котировках
@@ -62,18 +63,16 @@ func UpdateQuotes(newQuote *Quote) error {
 	// --- Проверка валидности данных ---
 
 	if newQuote.Price <= 0 {
-		logger.Logger.Warn().
-			Str("symbol", symbol).
-			Float64("price", newQuote.Price).
-			Msg("Invalid quote price, ignoring")
+		logger.Logger.Warn("Invalid quote price, ignoring",
+			zap.String("symbol", symbol),
+			zap.Float64("price", newQuote.Price))
 		return nil // Не фатальная ошибка, можно продолжить
 	}
 
 	if newQuote.Volume <= 0 {
-		logger.Logger.Warn().
-			Str("symbol", symbol).
-			Int64("volume", newQuote.Volume).
-			Msg("Invalid quote volume, ignoring")
+		logger.Logger.Warn("Invalid quote volume, ignoring",
+			zap.String("symbol", symbol),
+			zap.Int64("volume", newQuote.Volume))
 		return nil // Не фатальная ошибка
 	}
 
@@ -113,12 +112,11 @@ func UpdateQuotes(newQuote *Quote) error {
 	history.Value = *newQuote
 	history.Ring = history.Next()
 
-	logger.Logger.Info().
-		Str("symbol", symbol).
-		Str("tradingSession", tradingSession).
-		Float64("price", newQuote.Price).
-		Time("time", newQuote.Time).
-		Msg("Quote updated")
+	logger.Logger.Info("Quote updated",
+		zap.String("symbol", symbol),
+		zap.String("tradingSession", tradingSession),
+		zap.Float64("price", newQuote.Price),
+		zap.Time("time", newQuote.Time))
 
 	return nil
 }
@@ -182,13 +180,16 @@ func GetCurrentQuotes(symbol string) (*Quote, error) { //  Изменено:  в
 	quoteURL := fmt.Sprintf("https://trade-api.finam.ru/v1/quotes?symbols=%s", symbol)
 
 	// Логирование отправки запроса
-	logger.Logger.Info().Str("symbol", symbol).Str("url", quoteURL).Msg("Sending request for quotes")
+	logger.Logger.Info("Sending request for quotes",
+		zap.String("symbol", symbol),
+		zap.String("url", quoteURL))
 
 	// Выполнение запроса
 	resp, err := http.Get(quoteURL)
 	if err != nil {
 		// Логирование ошибки при отправке запроса
-		logger.Logger.Error().Err(err).Msg("Error making request to Trade API")
+		logger.Logger.Error("Error making request to Trade API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making request to Trade API: %w", err)
 	}
 	defer resp.Body.Close()
@@ -196,10 +197,9 @@ func GetCurrentQuotes(symbol string) (*Quote, error) { //  Изменено:  в
 	// Проверка статуса ответа
 	if resp.StatusCode != http.StatusOK {
 		// Логирование ошибки API Финам
-		logger.Logger.Error().
-			Int("status_code", resp.StatusCode).
-			Str("symbol", symbol).
-			Msg("Finam API error - GetCurrentQuotes")
+		logger.Logger.Error("Finam API error - GetCurrentQuotes",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("symbol", symbol))
 
 		// Обработка ошибок на основе кода статуса
 		switch resp.StatusCode {
@@ -222,7 +222,8 @@ func GetCurrentQuotes(symbol string) (*Quote, error) { //  Изменено:  в
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		// Логирование ошибки при чтении ответа
-		logger.Logger.Error().Err(err).Msg("Error reading response body from Trade API")
+		logger.Logger.Error("Error reading response body from Trade API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading response body from Trade API: %w", err)
 	}
 
@@ -231,18 +232,23 @@ func GetCurrentQuotes(symbol string) (*Quote, error) { //  Изменено:  в
 	err = json.Unmarshal(body, &quotes)
 	if err != nil {
 		// Логирование ошибки при парсинге JSON ответа
-		logger.Logger.Error().Err(err).Msg("Error parsing JSON response from Trade API")
+		logger.Logger.Error("Error parsing JSON response from Trade API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing JSON response from Trade API: %w", err)
 	}
 
 	if len(quotes) == 0 {
 		// Логирование отсутствия котировок для символа
-		logger.Logger.Warn().Str("symbol", symbol).Msg("No quotes found for symbol")
+		logger.Logger.Warn("No quotes found for symbol",
+			zap.String("symbol", symbol))
 		return nil, fmt.Errorf("no quotes found for symbol: %s", symbol)
 	}
 
 	// Логирование успешного получения котировок
-	logger.Logger.Info().Str("symbol", symbol).Float64("price", quotes[0].Price).Int64("volume", quotes[0].Volume).Msg("Quotes received successfully")
+	logger.Logger.Info("Quotes received successfully",
+		zap.String("symbol", symbol),
+		zap.Float64("price", quotes[0].Price),
+		zap.Int64("volume", quotes[0].Volume))
 
 	return &quotes[0], nil
 }
@@ -264,13 +270,16 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	infoURL := fmt.Sprintf("https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities/%s.json", symbol)
 
 	// Логирование отправки запроса
-	logger.Logger.Info().Str("symbol", symbol).Str("url", infoURL).Msg("Sending request for instrument info")
+	logger.Logger.Info("Sending request for instrument info",
+		zap.String("symbol", symbol),
+		zap.String("url", infoURL))
 
 	// Выполнение запроса
 	resp, err := http.Get(infoURL)
 	if err != nil {
 		// Логирование ошибки при отправке запроса
-		logger.Logger.Error().Err(err).Msg("Error making request to ISS API")
+		logger.Logger.Error("Error making request to ISS API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making request to ISS API: %w", err)
 	}
 	defer resp.Body.Close()
@@ -278,7 +287,9 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	// Проверка статуса ответа
 	if resp.StatusCode != http.StatusOK {
 		// Логирование ошибки API Московской биржи
-		logger.Logger.Error().Int("statusCode", resp.StatusCode).Str("symbol", symbol).Msg("Moscow Exchange API error")
+		logger.Logger.Error("Moscow Exchange API error",
+			zap.Int("statusCode", resp.StatusCode),
+			zap.String("symbol", symbol))
 
 		// Обработка ошибок API на основе кода статуса
 		switch resp.StatusCode {
@@ -293,7 +304,8 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		// Логирование ошибки при чтении ответа
-		logger.Logger.Error().Err(err).Msg("Error reading response body from ISS API")
+		logger.Logger.Error("Error reading response body from ISS API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading response body from ISS API: %w", err)
 	}
 
@@ -302,7 +314,8 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		// Логирование ошибки при парсинге JSON ответа
-		logger.Logger.Error().Err(err).Msg("Error parsing JSON response from ISS API")
+		logger.Logger.Error("Error parsing JSON response from ISS API",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing JSON response from ISS API: %w", err)
 	}
 
@@ -310,7 +323,8 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	securities := data["securities"].([]interface{})
 	if len(securities) == 0 {
 		// Логирование отсутствия данных для символа
-		logger.Logger.Warn().Str("symbol", symbol).Msg("No securities found for symbol")
+		logger.Logger.Warn("No securities found for symbol",
+			zap.String("symbol", symbol))
 		return nil, fmt.Errorf("no securities found for symbol: %s", symbol)
 	}
 
@@ -319,21 +333,24 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	lotSize, err := strconv.ParseInt(security["LOTSIZE"].(string), 10, 64)
 	if err != nil {
 		// Логирование ошибки при парсинге LOTSIZE
-		logger.Logger.Error().Err(err).Msg("Error parsing LOTSIZE from ISS API response")
+		logger.Logger.Error("Error parsing LOTSIZE from ISS API response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing LOTSIZE from ISS API response: %w", err)
 	}
 
 	priceStep, err := strconv.ParseFloat(security["MINSTEP"].(string), 64)
 	if err != nil {
 		// Логирование ошибки при парсинге MINSTEP
-		logger.Logger.Error().Err(err).Msg("Error parsing MINSTEP from ISS API response")
+		logger.Logger.Error("Error parsing MINSTEP from ISS API response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing MINSTEP from ISS API response: %w", err)
 	}
 
 	decimals, err := strconv.Atoi(security["DECIMALS"].(string))
 	if err != nil {
 		// Логирование ошибки при парсинге DECIMALS
-		logger.Logger.Error().Err(err).Msg("Error parsing DECIMALS from ISS API response")
+		logger.Logger.Error("Error parsing DECIMALS from ISS API response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing DECIMALS from ISS API response: %w", err)
 	}
 
@@ -347,12 +364,11 @@ func GetInstrumentInfo(symbol string) (*FinamInstrumentInfo, error) {
 	}
 
 	// Логирование успешного получения информации об инструменте
-	logger.Logger.Info().
-		Str("symbol", symbol).
-		Int("lotSize", info.LotSize).
-		Float64("priceStep", info.PriceStep).
-		Int("decimals", info.Decimals).
-		Msg("Instrument info received successfully")
+	logger.Logger.Info("Instrument info received successfully",
+		zap.String("symbol", symbol),
+		zap.Int("lotSize", info.LotSize),
+		zap.Float64("priceStep", info.PriceStep),
+		zap.Int("decimals", info.Decimals))
 
 	return info, nil
 }
@@ -362,17 +378,18 @@ func CheckFinamServerStatus() (bool, error) {
 	// Используем Trade API для проверки статуса
 
 	// Логирование проверки статуса сервера
-	logger.Logger.Info().Msg("Checking Finam server status")
+	logger.Logger.Info("Checking Finam server status")
 
 	_, err := GetCurrentQuotes("SBER") // Можно использовать любой ликвидный инструмент
 	if err != nil {
 		// Логирование ошибки при проверке статуса сервера
-		logger.Logger.Error().Err(err).Msg("Error checking Finam server status")
+		logger.Logger.Error("Error checking Finam server status",
+			zap.Error(err))
 		return false, err // Возвращаем ошибку из GetCurrentQuotes
 	}
 
 	// Логирование успешной проверки статуса сервера
-	logger.Logger.Info().Msg("Finam server is available")
+	logger.Logger.Info("Finam server is available")
 
 	return true, nil
 }

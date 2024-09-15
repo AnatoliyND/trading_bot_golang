@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 	"trading-bot/data"
 	"trading-bot/logger"
 
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
 
@@ -34,6 +36,13 @@ type Instrument struct {
 	// ... другие  поля,  если  необходимо ...
 }
 
+// ApiResponse определение структуры ответа API
+type ApiResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Data    string `json:"data"`
+}
+
 // Функция для создания нового объекта FinamAPI
 func NewFinamAPI(config *FinamConfig) (*FinamAPI, error) {
 	token := &oauth2.Token{
@@ -55,13 +64,12 @@ func (f *FinamAPI) LoadHistoricalData(symbol string, startDate time.Time, endDat
 		symbol, startDate.Format(time.RFC3339), endDate.Format(time.RFC3339), interval)
 
 	// Логирование
-	logger.Logger.Info().
-		Str("symbol", symbol).
-		Str("startDate", startDate.Format(time.RFC3339)).
-		Str("endDate", endDate.Format(time.RFC3339)).
-		Str("interval", interval).
-		Str("URL", url).
-		Msg("Запрос исторических данных")
+	logger.Logger.Info("Запрос исторических данных от API",
+		zap.String("symbol", string(symbol)),
+		zap.String("startDate", string(time.RFC3339)),
+		zap.String("endDate", string(time.RFC3339)),
+		zap.String("interval", string(interval)),
+		zap.String("URL", string(url)))
 
 	// Создание запроса
 	req, err := http.NewRequest("GET", url, nil)
@@ -97,10 +105,9 @@ func (f *FinamAPI) LoadHistoricalData(symbol string, startDate time.Time, endDat
 	}
 
 	// Логирование
-	logger.Logger.Info().
-		Str("symbol", symbol).
-		Int("количество свечей", len(candles.C)).
-		Msg("Исторические данные получены")
+	logger.Logger.Info("Исторические данные получены от API",
+		zap.String("symbol", string(symbol)),
+		zap.Int("количество свечей", len(candles.C)))
 
 	return &candles, nil
 }
@@ -111,7 +118,8 @@ func (f *FinamAPI) GetInstruments() ([]Instrument, error) {
 	url := "https://trade-api.finam.ru/v1/securities"
 
 	// 2. Логирование
-	logger.Logger.Info().Str("URL", url).Msg("Запрос списка инструментов")
+	logger.Logger.Info("Запрос списка инструментов",
+		zap.String("URL", url))
 
 	// 3. Создание HTTP запроса
 	req, err := http.NewRequest("GET", url, nil)
@@ -146,9 +154,38 @@ func (f *FinamAPI) GetInstruments() ([]Instrument, error) {
 	}
 
 	// 8. Логирование
-	logger.Logger.Info().
-		Int("количество инструментов", len(instruments)).
-		Msg("Список инструментов получен")
+	logger.Logger.Info("Список инструментов получен",
+		zap.Int("количество инструментов", len(instruments)))
 
 	return instruments, nil
+}
+
+func asyncApiRequest(url string, ch chan<- ApiResponse) {
+	// Выполняем запрос
+	response, err := http.Get(url)
+	if err != nil {
+		log.Printf("Ошибка запроса: %s", err)
+		return
+	}
+	defer response.Body.Close()
+
+	// Парсим результат
+	var result ApiResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		log.Printf("Ошибка парсинга ответа: %s", err)
+	}
+	ch <- result
+}
+
+func fetchMarketData(urls []string) {
+	ch := make(chan ApiResponse, len(urls))
+
+	for _, url := range urls {
+		go asyncApiRequest(url, ch)
+	}
+
+	for range urls {
+		result := <-ch
+		log.Printf("Результат: %+v", result)
+	}
 }

@@ -17,6 +17,7 @@ import (
 	"trading-bot/strategy"
 
 	"github.com/go-gota/gota/dataframe"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -27,40 +28,47 @@ func main() {
 	// Загрузка конфигурации
 	config, err := connector.LoadConfigFromFile("connector/transaq.json")
 	if err != nil {
-		logger.Logger.Warn().Err(err).Msg("Failed to load config from file. Trying to load from environment variables...")
+		logger.Logger.Warn("Failed to load config from file. Trying to load from environment variables...",
+			zap.Error(err))
 		config, err = connector.LoadConfigFromEnv()
 		if err != nil {
-			logger.Logger.Fatal().Err(err).Msg("Failed to load config from environment variables.")
+			logger.Logger.Fatal("Failed to load config from environment variables.",
+				zap.Error(err))
 		}
 	}
 
 	// Загрузка конфигурации Finam API из файла connector/transaq.json
 	finamConfig := &api.FinamConfig{}
 	if err := loadFinamConfig("connector/transaq.json", finamConfig); err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Failed to load Finam API config.")
+		logger.Logger.Fatal("Failed to load Finam API config.",
+			zap.Error(err))
 	}
 
 	// Создание объекта FinamAPI
 	finamAPI, err := api.NewFinamAPI(finamConfig)
 	if err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Failed to create Finam API object.")
+		logger.Logger.Fatal("Failed to create Finam API object.",
+			zap.Error(err))
 	}
 
 	// Создание объекта TransaqConnector
 	transaqConnector, err := connector.NewTransaqConnector(config)
 	if err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Failed to create Transaq Connector.")
+		logger.Logger.Fatal("Failed to create Transaq Connector.",
+			zap.Error(err))
 	}
 
 	// Подключение к Transaq Connector
 	if err := transaqConnector.Connect(); err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Failed to connect to Transaq Connector.")
+		logger.Logger.Fatal("Failed to connect to Transaq Connector.",
+			zap.Error(err))
 	}
 	defer transaqConnector.Close()
 
 	// Авторизация
 	if err := transaqConnector.Authorize(); err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Failed to authorize on Transaq Connector.")
+		logger.Logger.Fatal("Failed to authorize on Transaq Connector.",
+			zap.Error(err))
 	}
 
 	// Запуск чтения сообщений
@@ -77,16 +85,16 @@ func main() {
 	// 1. Получение списка инструментов
 	instruments, err := finamAPI.GetInstruments()
 	if err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Ошибка при получении списка инструментов")
+		logger.Logger.Fatal("Ошибка при получении списка инструментов",
+			zap.Error(err))
 	}
 
 	// 2. Вывод списка инструментов в лог (для проверки)
 	for _, instrument := range instruments {
-		logger.Logger.Info().
-			Int("ID", instrument.ID).
-			Str("Symbol", instrument.Symbol).
-			Str("Name", instrument.Name).
-			Msg("Instrument")
+		logger.Logger.Info("Instrument",
+			zap.Int("ID", instrument.ID),
+			zap.String("Symbol", instrument.Symbol),
+			zap.String("Name", instrument.Name))
 	}
 
 	//  Выбор  стратегии
@@ -102,13 +110,14 @@ func main() {
 	// case "другая_стратегия":
 	//     strategy = &strategy.ДругаяСтратегия{ /* ...  параметры  ...  */ }
 	default:
-		logger.Logger.Fatal().Msg("Неизвестная  стратегия")
+		logger.Logger.Fatal("Неизвестная  стратегия")
 	}
 
 	// Получение списка инструментов
 	err = transaqConnector.SendMessage("<command id=\"get_securities\"/>")
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Failed to send get_securities command")
+		logger.Logger.Error("Failed to send get_securities command",
+			zap.Error(err))
 	}
 
 	// Цикл работы робота
@@ -116,7 +125,8 @@ func main() {
 		// 1. Получаем сообщение от Transaq Connector
 		message, err := transaqConnector.GetMessageWithTimeout(10 * time.Second)
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Error getting message from connector.")
+			logger.Logger.Error("Error getting message from connector.",
+				zap.Error(err))
 			// Попытка переподключения...
 			continue
 		}
@@ -139,14 +149,14 @@ func main() {
 
 				err = xml.Unmarshal([]byte(message), &securities)
 				if err != nil {
-					logger.Logger.Error().Err(err).Msg("Failed to parse securities response")
+					logger.Logger.Error("Failed to parse securities response",
+						zap.Error(err))
 				} else {
 					for _, s := range securities.Securities {
-						logger.Logger.Info().
-							Str("secid", s.Secid).
-							Str("board", s.Board).
-							Str("shortname", s.Shortname).
-							Msg("Security")
+						logger.Logger.Info("Security",
+							zap.String("secid", s.Secid),
+							zap.String("board", s.Board),
+							zap.String("shortname", s.Shortname))
 					}
 				}
 			}
@@ -155,7 +165,8 @@ func main() {
 		// 2. Получение текущей  котировки  для  выбранного  инструмента
 		quote, err := data.GetCurrentQuotes(tradingSymbol)
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Error getting current quotes.")
+			logger.Logger.Error("Error getting current quotes.",
+				zap.Error(err))
 			continue //  Пропускаем  текущую  итерацию  и  переходим  к  следующей
 		}
 
@@ -165,7 +176,8 @@ func main() {
 			endDate := time.Now()
 			historicalData, err := finamAPI.LoadHistoricalData(tradingSymbol, startDate, endDate, "1d")
 			if err != nil {
-				logger.Logger.Error().Err(err).Msg("Error loading historical data.")
+				logger.Logger.Error("Error loading historical data.",
+					zap.Error(err))
 				continue
 			}
 
@@ -192,14 +204,16 @@ func main() {
 			// 5. Получение информации о  портфеле
 			portfolio, err := order.GetPortfolioInfo(finamConfig.AccessToken)
 			if err != nil {
-				logger.Logger.Error().Err(err).Msg("Error getting portfolio info.")
+				logger.Logger.Error("Error getting portfolio info.",
+					zap.Error(err))
 				continue
 			}
 
 			// 6. Генерация торговых сигналов на основе стратегии
 			signals, err := chosenStrategyName.GetSignals(quote, &historyDf, portfolio)
 			if err != nil {
-				logger.Logger.Error().Err(err).Msg("Error getting trading signals.")
+				logger.Logger.Error("Error getting trading signals.",
+					zap.Error(err))
 				continue
 			}
 
@@ -209,9 +223,8 @@ func main() {
 
 				//  Проверка  наличия  достаточных  средств
 				if signal.Side == "buy" && portfolio.Balances["RUB"].Available < signal.Price {
-					logger.Logger.Warn().
-						Str("symbol", signal.Symbol).
-						Msg("Недостаточно средств для покупки")
+					logger.Logger.Warn("Недостаточно средств для покупки",
+						zap.String("symbol", signal.Symbol))
 					continue //  Пропускаем  ордер
 				}
 
@@ -224,9 +237,8 @@ func main() {
 					}
 				}
 				if hasOpenPosition {
-					logger.Logger.Warn().
-						Str("symbol", signal.Symbol).
-						Msg("Позиция по инструменту уже открыта")
+					logger.Logger.Warn("Позиция по инструменту уже открыта",
+						zap.String("symbol", signal.Symbol))
 					continue // Пропускаем ордер
 				}
 
@@ -243,7 +255,8 @@ func main() {
 					}
 					_, err := order.CreateOrder(orderRequest)
 					if err != nil {
-						logger.Logger.Error().Err(err).Msg("Error creating buy order.")
+						logger.Logger.Error("Error creating buy order.",
+							zap.Error(err))
 					}
 				} else if signal.Side == "sell" {
 					//  Создание  ордера  на  продажу
@@ -257,7 +270,8 @@ func main() {
 					}
 					_, err := order.CreateOrder(orderRequest)
 					if err != nil {
-						logger.Logger.Error().Err(err).Msg("Error  creating  sell  order.")
+						logger.Logger.Error("Error  creating  sell  order.",
+							zap.Error(err))
 					}
 				}
 			}

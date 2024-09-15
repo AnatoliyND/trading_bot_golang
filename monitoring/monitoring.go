@@ -5,6 +5,8 @@ import (
 
 	"trading-bot/data"
 	"trading-bot/logger"
+
+	"go.uber.org/zap"
 )
 
 // Функция для мониторинга статуса серверов
@@ -13,19 +15,21 @@ func MonitorServerStatus(interval time.Duration) {
 		// Проверка статуса сервера Финам
 		finamAvailable, err := data.CheckFinamServerStatus()
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Failed to check Finam server status")
+			logger.Logger.Error("Failed to check Finam server status",
+				zap.Error(err))
 		} else if !finamAvailable {
-			logger.Logger.Warn().Msg("Finam server is unavailable")
+			logger.Logger.Warn("Finam server is unavailable")
 		} else {
-			logger.Logger.Debug().Msg("Finam server is available")
+			logger.Logger.Debug("Finam server is available")
 		}
 
 		// Проверка статуса сервера Московской биржи
 		_, err = data.GetInstrumentInfo("SBER") // Используем любой известный тикер
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Failed to check Moscow Exchange server status")
+			logger.Logger.Error("Failed to check Moscow Exchange server status",
+				zap.Error(err))
 		} else {
-			logger.Logger.Debug().Msg("Moscow Exchange server is available")
+			logger.Logger.Debug("Moscow Exchange server is available")
 		}
 
 		// Пауза перед следующей проверкой

@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-gota/gota/series"
+	"go.uber.org/zap"
 )
 
 // Структура для хранения результатов бэктеста
@@ -72,10 +73,9 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 		}),
 	)
 
-	logger.Logger.Info().
-		Str("symbol", symbol).
-		Int("rows", historyDf.Nrow()).
-		Msg("Historical data loaded")
+	logger.Logger.Info("Historical data loaded",
+		zap.String("symbol", string(symbol)),
+		zap.Int("rows", historyDf.Nrow()))
 
 	// 3. Инициализация портфеля
 	portfolio := &order.PortfolioInfo{
@@ -114,15 +114,15 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 			Time:  currentBarTime,
 		}, &historyDf, portfolio) // Передаем также ссылку на портфель
 		if err != nil {
-			logger.Logger.Warn().Err(err).Msg("Error getting signals, skipping bar")
+			logger.Logger.Warn("Error getting signals",
+				zap.Error(err))
 			continue // Пропускаем бар, если есть ошибка в стратегии
 		}
 
-		logger.Logger.Debug().
-			Int("bar", i).
-			Time("time", currentBarTime).
-			Interface("signals", signals).
-			Msg("Bar processed")
+		logger.Logger.Debug("Bar processed",
+			zap.Int("bar", i),
+			zap.Time("time", currentBarTime),
+			zap.Interface("signals", signals))
 
 		// Обработка сигналов
 		for _, signal := range signals {
@@ -131,9 +131,8 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 				// Расчет размера позиции (в лотах)
 				positionSizeLots := int(math.Floor((portfolio.Balances["RUB"].Available * 0.01) / signal.Price)) // 0.01 как пример
 				if positionSizeLots == 0 {
-					logger.Logger.Warn().
-						Str("symbol", signal.Symbol).
-						Msg("Недостаточно средств для открытия позиции")
+					logger.Logger.Warn("Недостаточно средств для открытия позиции",
+						zap.String("symbol", signal.Symbol))
 					continue // Недостаточно средств даже для 1 лота
 				}
 
@@ -156,11 +155,10 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 					OpenPrice: signal.Price,
 					OpenTime:  currentBarTime,
 				})
-				logger.Logger.Debug().
-					Str("symbol", signal.Symbol).
-					Str("side", "buy").
-					Float64("price", signal.Price).
-					Msg("Virtual buy order executed")
+				logger.Logger.Debug("Virtual buy order executed",
+					zap.String("symbol", signal.Symbol),
+					zap.String("side", "buy"),
+					zap.Float64("price", signal.Price))
 
 			} else if signal.Side == "sell" {
 				// Проверяем, есть ли у нас открытая позиция по этому инструменту
@@ -191,11 +189,10 @@ func RunBacktest(finamAPI *api.FinamAPI, symbol string, strategy strategy.Strate
 							CloseTime:  currentBarTime,
 							Profit:     profit,
 						})
-						logger.Logger.Debug().
-							Str("symbol", signal.Symbol).
-							Str("side", "sell").
-							Float64("price", signal.Price).
-							Msg("Virtual sell order executed")
+						logger.Logger.Debug("Virtual sell order executed",
+							zap.String("symbol", signal.Symbol),
+							zap.String("side", "sell"),
+							zap.Float64("price", signal.Price))
 
 						break // Выходим из цикла, т.к. позиция закрыта
 					}

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 	"trading-bot/logger"
+
+	"go.uber.org/zap"
 )
 
 // Структура для создания нового ордера
@@ -131,17 +133,17 @@ func CreateOrder(order *OrderRequest) (*OrderResponse, error) {
 	}
 
 	// Логирование отправки запроса на создание ордера
-	logger.Logger.Info().
-		Str("symbol", order.Symbol).
-		Str("side", order.Side).
-		Int("quantity", order.Quantity).
-		Str("order_type", order.OrderType).
-		Msg("Sending order creation request")
+	logger.Logger.Info("Sending order creation request",
+		zap.String("symbol", order.Symbol),
+		zap.String("side", order.Side),
+		zap.Int("quantity", order.Quantity),
+		zap.String("order_type", order.OrderType))
 
 	// Отправка HTTP запроса
 	resp, err := http.Post(orderURL, "application/json", bytes.NewBuffer(orderJSON))
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error making order creation request")
+		logger.Logger.Error("Error making order creation request",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making order creation request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -149,7 +151,8 @@ func CreateOrder(order *OrderRequest) (*OrderResponse, error) {
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error reading order creation response body")
+		logger.Logger.Error("Error reading order creation response body",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading order creation response body: %w", err)
 	}
 
@@ -157,23 +160,22 @@ func CreateOrder(order *OrderRequest) (*OrderResponse, error) {
 	var orderResp OrderResponse
 	err = json.Unmarshal(body, &orderResp)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error parsing order creation JSON response")
+		logger.Logger.Error("Error parsing order creation JSON response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing order creation JSON response: %w", err)
 	}
 
 	// Обработка статуса ответа
 	if orderResp.Status != "success" {
-		logger.Logger.Error().
-			Str("status", orderResp.Status).
-			Str("message", orderResp.Message).
-			Msg("Order creation failed")
+		logger.Logger.Error("Order creation failed",
+			zap.String("status", orderResp.Status),
+			zap.String("message", orderResp.Message))
 		return nil, fmt.Errorf("order creation failed: %s", orderResp.Message)
 	}
 
 	// Логирование успешного создания ордера
-	logger.Logger.Info().
-		Int("order_id", orderResp.OrderID).
-		Msg("Order created successfully")
+	logger.Logger.Info("Order created successfully",
+		zap.Int("order_id", orderResp.OrderID))
 
 	return &orderResp, nil
 }
@@ -192,12 +194,14 @@ func CancelOrder(orderID int, accessToken string) error {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	// Логирование отправки запроса на отмену ордера
-	logger.Logger.Info().Int("order_id", orderID).Msg("Sending order cancellation request")
+	logger.Logger.Info("Sending order cancellation request",
+		zap.Int("order_id", orderID))
 
 	// Выполнение запроса
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error making order cancellation request")
+		logger.Logger.Error("Error making order cancellation request",
+			zap.Error(err))
 		return fmt.Errorf("error making order cancellation request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -205,10 +209,9 @@ func CancelOrder(orderID int, accessToken string) error {
 	// Проверка статуса ответа (опционально, если требуется обработка ответов)
 	if resp.StatusCode != http.StatusOK {
 		// Логирование ошибки при отмене ордера
-		logger.Logger.Error().
-			Int("status_code", resp.StatusCode).
-			Int("order_id", orderID).
-			Msg("Finam API error - CancelOrder")
+		logger.Logger.Error("Finam API error - CancelOrder",
+			zap.Int("status_code", resp.StatusCode),
+			zap.Int("order_id", orderID))
 	}
 	// Обработка ответа (если требуется)
 	// ...
@@ -230,12 +233,14 @@ func GetOrderStatus(orderID int, accessToken string) (*OrderResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	// Логирование отправки запроса на получение статуса ордера
-	logger.Logger.Info().Int("order_id", orderID).Msg("Sending get order status request")
+	logger.Logger.Info("Sending get order status request",
+		zap.Int("order_id", orderID))
 
 	// Выполнение запроса
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error making get order status request")
+		logger.Logger.Error("Error making get order status request",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making get order status request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -243,10 +248,9 @@ func GetOrderStatus(orderID int, accessToken string) (*OrderResponse, error) {
 	// Проверка статуса ответа
 	if resp.StatusCode != http.StatusOK {
 		// Логирование ошибки при получении статуса ордера
-		logger.Logger.Error().
-			Int("status_code", resp.StatusCode).
-			Int("order_id", orderID).
-			Msg("Finam API error - GetOrderStatus")
+		logger.Logger.Error("Finam API error - GetOrderStatus",
+			zap.Int("status_code", resp.StatusCode),
+			zap.Int("order_id", orderID))
 
 		// Обработка ошибок на основе кода статуса
 		switch resp.StatusCode {
@@ -268,7 +272,8 @@ func GetOrderStatus(orderID int, accessToken string) (*OrderResponse, error) {
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error reading get order status response body")
+		logger.Logger.Error("Error reading get order status response body",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading get order status response body: %w", err)
 	}
 
@@ -276,15 +281,15 @@ func GetOrderStatus(orderID int, accessToken string) (*OrderResponse, error) {
 	var orderResp OrderResponse
 	err = json.Unmarshal(body, &orderResp)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error parsing get order status JSON response")
+		logger.Logger.Error("Error parsing get order status JSON response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing get order status JSON response: %w", err)
 	}
 
 	// Логирование успешного получения статуса ордера
-	logger.Logger.Info().
-		Int("order_id", orderResp.OrderID).
-		Str("status", orderResp.Status).
-		Msg("Get order status successfully")
+	logger.Logger.Info("Get order status successfully",
+		zap.Int("order_id", orderResp.OrderID),
+		zap.String("status", orderResp.Status))
 	return &orderResp, nil
 }
 
@@ -301,11 +306,12 @@ func GetPortfolioInfo(accessToken string) (*PortfolioInfo, error) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	// Логирование отправки запроса на получение статуса ордера
-	logger.Logger.Info().Msg("Sending get portfolio info request")
+	logger.Logger.Info("Sending get portfolio info request")
 	// Выполнение запроса
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error making get portfolio info request")
+		logger.Logger.Error("Error making get portfolio info request",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making get portfolio info request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -313,19 +319,21 @@ func GetPortfolioInfo(accessToken string) (*PortfolioInfo, error) {
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error reading get portfolio info response body")
+		logger.Logger.Error("Error reading get portfolio info response body",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading get portfolio info response body: %w", err)
 	}
 	// Парсинг JSON ответа
 	var portfolioInfo PortfolioInfo
 	err = json.Unmarshal(body, &portfolioInfo)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error parsing get portfolio info JSON response")
+		logger.Logger.Error("Error parsing get portfolio info JSON response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing get portfolio info JSON response: %w", err)
 	}
 
 	// Логирование успешного получения статуса ордера
-	logger.Logger.Info().Msg("Get portfolio info successfully")
+	logger.Logger.Info("Get portfolio info successfully")
 	return &portfolioInfo, nil
 }
 
@@ -374,11 +382,10 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 	}
 
 	// Логирование отправки запроса истории ордеров
-	logger.Logger.Info().
-		Time("from", req.From).
-		Time("to", req.To).
-		Str("symbol", req.Symbol).
-		Msg("Sending orders history request")
+	logger.Logger.Info("Sending orders history request",
+		zap.Time("from", req.From),
+		zap.Time("to", req.To),
+		zap.String("symbol", req.Symbol))
 
 	// Создание HTTP клиента и запроса с токеном доступа
 	client := &http.Client{}
@@ -392,7 +399,8 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 	// Выполнение запроса
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error making orders history request")
+		logger.Logger.Error("Error making orders history request",
+			zap.Error(err))
 		return nil, fmt.Errorf("error making orders history request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -400,9 +408,8 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 	//  Проверка  статуса  ответа
 	if resp.StatusCode != http.StatusOK {
 		//  Логирование  ошибки  API  Финам
-		logger.Logger.Error().
-			Int("status_code", resp.StatusCode).
-			Msg("Finam  API  error  -  GetOrdersHistory")
+		logger.Logger.Error("Finam  API  error  -  GetOrdersHistory",
+			zap.Int("status_code", resp.StatusCode))
 
 		// Обработка ошибок на основе кода статуса
 		switch resp.StatusCode {
@@ -424,7 +431,8 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error reading orders history response body")
+		logger.Logger.Error("Error reading orders history response body",
+			zap.Error(err))
 		return nil, fmt.Errorf("error reading orders history response body: %w", err)
 	}
 
@@ -432,14 +440,14 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 	var historyResp OrdersHistoryResponse
 	err = json.Unmarshal(body, &historyResp)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error parsing orders history JSON response")
+		logger.Logger.Error("Error parsing orders history JSON response",
+			zap.Error(err))
 		return nil, fmt.Errorf("error parsing orders history JSON response: %w", err)
 	}
 
 	// Логирование успешного получения истории ордеров
-	logger.Logger.Info().
-		Int("orders_count", len(historyResp.Orders)).
-		Msg("Orders history received successfully")
+	logger.Logger.Info("Orders history received successfully",
+		zap.Int("orders_count", len(historyResp.Orders)))
 
 	return &historyResp, nil
 }
@@ -447,33 +455,32 @@ func GetOrdersHistory(req *OrdersHistoryRequest, accessToken string) (*OrdersHis
 // Функция для изменения ордера (с отменой и созданием нового ордера). Функция принимает orderID (ID ордера, который нужно изменить) и newOrder (структуру OrderRequest с параметрами нового ордера)
 func ModifyOrder(orderID int, newOrder *OrderRequest) (*OrderResponse, error) {
 	// Логирование начала изменения ордера
-	logger.Logger.Info().
-		Int("order_id", orderID).
-		Msg("Modifying order")
+	logger.Logger.Info("Modifying order",
+		zap.Int("order_id", orderID))
 
 	// Отмена старого ордера
 	err := CancelOrder(orderID, newOrder.AccessToken)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error canceling order")
+		logger.Logger.Error("Error canceling order",
+			zap.Error(err))
 		return nil, fmt.Errorf("error canceling order: %w", err)
 	}
 
 	// Логирование успешной отмены ордера
-	logger.Logger.Info().
-		Int("order_id", orderID).
-		Msg("Order canceled successfully")
+	logger.Logger.Info("Order canceled successfully",
+		zap.Int("order_id", orderID))
 
 	// Создание нового ордера
 	orderResp, err := CreateOrder(newOrder)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error creating new order")
+		logger.Logger.Error("Error creating new order",
+			zap.Error(err))
 		return nil, fmt.Errorf("error creating new order: %w", err)
 	}
 
 	// Логирование успешного создания нового ордера
-	logger.Logger.Info().
-		Int("new_order_id", orderResp.OrderID).
-		Msg("New order created successfully")
+	logger.Logger.Info("New order created successfully",
+		zap.Int("new_order_id", orderResp.OrderID))
 
 	return orderResp, nil
 }

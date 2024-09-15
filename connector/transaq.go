@@ -13,6 +13,8 @@ import (
 
 	"trading-bot/data"
 	"trading-bot/logger"
+
+	"go.uber.org/zap"
 )
 
 // Структура для хранения конфигурации Transaq Connector
@@ -42,17 +44,20 @@ func NewTransaqConnector(config *TransaqConfig) (*TransaqConnector, error) {
 // Функция для подключения к серверу Transaq
 func (t *TransaqConnector) Connect() error {
 	// Логирование попытки подключения
-	logger.Logger.Info().Str("host", t.config.Host).Int("port", t.config.Port).Msg("Connecting to Transaq Connector...")
+	logger.Logger.Info("Connecting to Transaq Connector...",
+		zap.String("host", t.config.Host),
+		zap.Int("port", t.config.Port))
 	address := fmt.Sprintf("%s:%d", t.config.Host, t.config.Port)
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		// Логирование ошибки при подключении
-		logger.Logger.Error().Err(err).Msg("Connection failed.")
+		logger.Logger.Error("Connection failed.",
+			zap.Error(err))
 		return fmt.Errorf("error connecting to Transaq Connector: %w", err)
 	}
 
 	t.conn = conn
-	logger.Logger.Info().Msg("Connected to Transaq Connector.")
+	logger.Logger.Info("Connected to Transaq Connector.")
 	return nil
 }
 
@@ -64,10 +69,12 @@ func (t *TransaqConnector) SendMessage(message string) error {
 	}
 
 	// Логирование отправки сообщения
-	logger.Logger.Debug().Str("message", message).Msg("Sending message to Transaq Connector...")
+	logger.Logger.Debug("Sending message to Transaq Connector...",
+		zap.String("message", message))
 	_, err := t.conn.Write([]byte(message))
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Failed to send message.")
+		logger.Logger.Error("Failed to send message.",
+			zap.Error(err))
 		return fmt.Errorf("error sending message to Transaq Connector: %w", err)
 	}
 
@@ -95,12 +102,14 @@ func (t *TransaqConnector) HandleEvent(message string) {
 		var quote data.Quote
 		err := xml.Unmarshal([]byte(message), &quote)
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Failed to parse new_quote event")
+			logger.Logger.Error("Failed to parse new_quote event",
+				zap.Error(err))
 			return
 		}
 		err = data.UpdateQuotes(&quote) // Функция из пакета data для обновления котировок
 		if err != nil {
-			logger.Logger.Error().Err(err).Msg("Failed to update quotes")
+			logger.Logger.Error("Failed to update quotes",
+				zap.Error(err))
 		}
 	}
 	// ... Обработка других событий (new_order, order_cancelled, etc.) ...
@@ -110,7 +119,7 @@ func (t *TransaqConnector) HandleEvent(message string) {
 func (t *TransaqConnector) Close() {
 	close(t.stop)
 	if t.conn != nil {
-		logger.Logger.Info().Msg("Closing connection...")
+		logger.Logger.Info("Closing connection...")
 		t.conn.Close()
 	}
 }
@@ -131,14 +140,13 @@ func (t *TransaqConnector) Authorize() error {
 
 	// Проверка успешной авторизации
 	if strings.Contains(authResponse, "connected") {
-		logger.Logger.Info().Msg("Authorization successful.")
+		logger.Logger.Info("Authorization successful.")
 		return nil
 	}
 
 	// Логирование ошибки при авторизации
-	logger.Logger.Error().
-		Str("response", authResponse).
-		Msg("Authorization failed.")
+	logger.Logger.Error("Authorization failed.",
+		zap.String("response", authResponse))
 	return fmt.Errorf("authorization failed: %s", authResponse)
 }
 
@@ -158,7 +166,8 @@ func (t *TransaqConnector) StartHeartbeat(interval time.Duration) {
 				return
 			case <-ticker.C:
 				if err := t.sendHeartbeat(); err != nil {
-					logger.Logger.Error().Err(err).Msg("Failed to send heartbeat message")
+					logger.Logger.Error("Failed to send heartbeat message",
+						zap.Error(err))
 				}
 			}
 		}
@@ -214,11 +223,13 @@ func (t *TransaqConnector) StartReading() {
 		for scanner.Scan() {
 			message := scanner.Text()
 			t.messages <- message
-			logger.Logger.Debug().Str("message", message).Msg("Message received from Transaq Connector")
+			logger.Logger.Debug("Message received from Transaq Connector",
+				zap.String("message", message))
 		}
 		if err := scanner.Err(); err != nil {
 			// Логирование ошибки при чтении
-			logger.Logger.Error().Err(err).Msg("Error reading message from Transaq Connector")
+			logger.Logger.Error("Error reading message from Transaq Connector",
+				zap.Error(err))
 		}
 	}()
 }
